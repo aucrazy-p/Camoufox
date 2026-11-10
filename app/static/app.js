@@ -21,7 +21,7 @@ const del  = (p) => api(p, { method: 'DELETE' });
 
 let S = { profiles: [], tab: '__all', q: '', asc: true, view: 'profiles', editId: null,
           settings: { theme: 'dark', close_action: 'tray', autostart: false, download_proxy: '' },
-          health: null, kernel: null, releases: [], dlTimer: null };
+          health: null, kernel: null, runtime: null, releases: [], dlTimer: null, rtTimer: null };
 
 function toast(msg, ms = 2600) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
@@ -259,8 +259,68 @@ $('btn-del').onclick = async () => {
   catch (e) { toast('删除失败：' + e.message, 5000); }
 };
 
+/* ---------------- 浏览器运行时包 ---------------- */
+async function loadRuntime() {
+  try {
+    const s = await api('/api/runtime/status');
+    S.runtime = s;
+    $('rt-badge').textContent = s.installed ? '已安装' : '未安装';
+    $('rt-badge').className = 'badge ' + (s.installed ? 'ok' : 'warn');
+    const yes = (b) => `<span class="badge ${b ? 'ok' : 'warn'}">${b ? '就位' : '缺失'}</span>`;
+    const m = s.modules || {};
+    $('rt-kv').innerHTML = [
+      ['状态', s.installed ? '<span class="badge ok">已安装，可启动环境</span>' : '<span class="badge warn">未安装，环境无法启动</span>'],
+      ['版本标记', esc(s.tag || '—')],
+      ['安装路径', esc(s.path || '—')],
+      ['占用体积', s.size_mb ? s.size_mb + ' MB' : '—'],
+      ['Playwright', yes(m['playwright/driver/node.exe'])],
+      ['Camoufox', yes(m['camoufox/utils.py'])],
+      ['指纹模型', yes(m['fpgen/__init__.py'])],
+    ].map(([k, v]) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  } catch (e) { toast('读取运行时状态失败：' + e.message, 5000); }
+}
+function startRtInstall(localZip) {
+  const tag = (S.runtime && S.runtime.tag) || 'runtime-v1';
+  if (!localZip && !confirm(
+    `即将下载并安装浏览器运行时 ${tag}。\n\n` +
+    '· 下载约 70 MB，装到 CamoufoxData\\runtime-extra\\\n' +
+    '· 只装一次，之后换 exe 不用重装\n' +
+    '· 来源固定为 GitHub Releases 的 runtime-v1，失败不会自动尝试第三方镜像\n' +
+    '· 下载代理复用下方「下载代理」设置\n\n确定开始？')) return;
+  if (localZip && !confirm(`从本地文件安装浏览器运行时？\n${localZip}\n\n会先校验内容与版本，再替换现有目录。`)) return;
+  post('/api/runtime/install', { local_zip: localZip, proxy: $('kernel-proxy').value.trim() })
+    .then(() => { $('rt-box').hidden = false; pollRtProgress(); })
+    .catch(e => toast('启动安装失败：' + e.message, 6000));
+}
+function pollRtProgress() {
+  clearInterval(S.rtTimer);
+  S.rtTimer = setInterval(async () => {
+    try {
+      const p = await api('/api/runtime/progress');
+      $('rt-msg').textContent = p.message || p.phase;
+      $('rt-pct').textContent = (p.percent || 0) + '%';
+      $('rt-bar').style.width = (p.percent || 0) + '%';
+      if (p.phase === 'done' || p.phase === 'error' || (p.phase === 'idle' && p.message)) {
+        clearInterval(S.rtTimer); S.rtTimer = null;
+        if (p.phase === 'done') { toast('浏览器运行时安装完成'); loadRuntime(); loadKernel(); loadHealth(); }
+        else if (p.phase === 'error') toast('安装失败：' + p.error, 8000);
+      }
+    } catch (e) { clearInterval(S.rtTimer); S.rtTimer = null; }
+  }, 700);
+}
+$('btn-rt-install').onclick = () => startRtInstall('');
+$('btn-rt-local').onclick = async () => {
+  if (!pj()) return toast('本地文件选择仅在应用程序内可用');
+  try {
+    const p = await window.pywebview.api.choose_zip();
+    if (p) startRtInstall(p);
+  } catch (e) { toast('选择文件失败：' + e); }
+};
+$('btn-rt-cancel').onclick = async () => { await post('/api/runtime/cancel'); toast('已请求取消'); };
+
 /* ---------------- 内核管理 ---------------- */
 async function loadKernel() {
+  loadRuntime();
   try {
     const s = await api('/api/kernel/status');
     S.kernel = s;

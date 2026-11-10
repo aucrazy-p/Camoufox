@@ -91,6 +91,7 @@ def status() -> dict:
         "free_mb": round(free / 1024 / 1024),
         "fpgen": common.fpgen_ready(),
         "geoip": common.geoip_ready(),
+        "runtime_pack": common.runtime_pack_ready(),
         "supported_os": common.supported_oses(),
         # 明确声明：只有用户在界面点「安装此版本」才会 install()，启动时/查版本都不会下载
         "auto_install": policy.AUTO_INSTALL_KERNEL,
@@ -264,6 +265,8 @@ def inspect_fonts(kernel_dir: Path) -> dict:
 
 def _install_extras(proxy: str) -> str:
     """GeoIP 库是首次安装的可选组件，失败不阻断内核安装。"""
+    if not common.runtime_pack_ready():
+        return "GeoIP 跳过：浏览器运行时未安装（先装运行时，再装内核会自动补齐）"
     if common.geoip_ready():
         return "GeoIP 已就位"
     _set(message="下载 GeoIP 数据库（约 50MB）")

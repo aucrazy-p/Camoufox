@@ -11,13 +11,19 @@ on:
         default: '3.13.14'
         type: string
       keep_artifact:
-        description: '把 exe 存为构建产物（保留 90 天）'
+        description: '把构建产物存为 artifact（保留 90 天）'
         required: false
         default: true
         type: boolean
+      publish_release:
+        description: '【对外发布】把浏览器运行时包发布/更新到 Release 的 runtime-v1（默认关闭）'
+        required: false
+        default: false
+        type: boolean
 
+# 写权限只在 publish_release=true 那个步骤里才会被用到；默认构建全程只读。
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -45,25 +51,69 @@ jobs:
           FP_PY_VERSION: ${{ inputs.python_version }}
         run: python _tools/prepare_runtime.py --version $env:FP_PY_VERSION
 
-      - name: 打包单文件 exe
+      # 一次 build.py 同时产出：管理端 exe + runtime-extra-v1.zip + .sha256
+      - name: 打包 exe 与浏览器运行时包
         shell: pwsh
         run: |
           $env:FP_BUILD_PY = (Get-Command python).Source
           python _tools/build.py
 
-      - name: 核对产物
+      - name: 核对三个产物
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path dist -Filter '*.exe' | Select-Object -First 1
-          if (-not $exe) { throw '未生成 exe' }
-          '{0}  {1:N1} MB' -f $exe.Name, ($exe.Length / 1MB)
+          $want = @(
+            'dist/指纹环境管理器.exe',
+            'dist/runtime-extra-v1.zip',
+            'dist/runtime-extra-v1.zip.sha256'
+          )
+          foreach ($f in $want) {
+            if (-not (Test-Path $f)) { throw "缺少产物: $f" }
+            $i = Get-Item $f
+            '{0}  {1:N1} MB' -f $i.Name, ($i.Length / 1MB)
+          }
+          $sha = (Get-Content 'dist/runtime-extra-v1.zip.sha256' -Raw).Trim().Split()[0]
+          $got = (Get-FileHash 'dist/runtime-extra-v1.zip' -Algorithm SHA256).Hash.ToLower()
+          if ($sha -ne $got) { throw '运行时包 SHA256 校验失败' }
+          'SHA256 一致: ' + $got
 
-      # 只存构建产物，不自动创建 Release、不自动发布。
       - name: 上传构建产物
         if: ${{ inputs.keep_artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: 指纹环境管理器
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.sha256
           if-no-files-found: error
           retention-days: 90
+
+      # 只有手动勾选 publish_release 才会执行。绝不自动建 Release、绝不自动发布 exe。
+      # tag 与 app/common.py 的 RUNTIME_TAG、_tools/build.py 的 RUNTIME_TAG 必须一致。
+      - name: 发布浏览器运行时包到 Release（已勾选）
+        if: ${{ inputs.publish_release }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # gh release view 在 Release 不存在时会以非零码退出；
+          # pwsh 7.3+ 默认会把它当错误抛出，显式关掉才能用 $LASTEXITCODE 判断。
+          $ErrorActionPreference = 'continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $tag  = 'runtime-v1'
+          $zip  = 'dist/runtime-extra-v1.zip'
+          $sha  = 'dist/runtime-extra-v1.zip.sha256'
+          gh release view $tag --json tagName | Out-Null
+          $exists = ($LASTEXITCODE -eq 0)
+          if ($exists) {
+            # --clobber 覆盖同名资产：依赖升级后重发同一个 tag，程序下载地址不变
+            gh release upload $tag $zip $sha --clobber
+            if ($LASTEXITCODE -ne 0) { throw '上传运行时包失败' }
+          } else {
+            gh release create $tag --title "浏览器运行时 $tag" `
+              --notes "由手动构建生成，供控制端首次启动按需下载。此 Release 只含浏览器运行时包，不含浏览器内核，也不含账号数据。" `
+              $zip $sha
+            if ($LASTEXITCODE -ne 0) { throw '创建 Release 失败' }
+          }
+          gh release view $tag --json assets --jq '.assets[].name'

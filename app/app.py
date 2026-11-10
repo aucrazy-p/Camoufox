@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
 import kernel_manager  # noqa: E402
 import policy  # noqa: E402
+import runtime_pack  # noqa: E402
 
 common.prepare_env()
 
@@ -168,29 +169,43 @@ def _is_running(profile_id: str) -> bool:
 # ---------------------------------------------------------------- 依赖状态
 
 def _camoufox_status() -> dict:
-    try:
-        import camoufox  # noqa: F401
-    except Exception as exc:
-        return {"ready": False, "reason": f"依赖未安装（{exc}）", "parts": {}}
-
+    """启动环境的四项前置条件。运行时包与内核都是「必须由用户手动装」。"""
+    pack = runtime_pack.status()
     kernel = common.kernel_exe()
     parts = {
-        "依赖": True,
+        "浏览器运行时": pack["installed"],
         "浏览器内核": kernel is not None,
         "指纹模型": common.fpgen_ready(),
         "GeoIP 库": common.geoip_ready(),
     }
+    base = {"parts": parts, "runtime_pack": {"installed": pack["installed"], "tag": pack["tag"]}}
+
+    if not pack["installed"]:
+        return {
+            **base, "ready": False,
+            "reason": (f"浏览器运行时未安装（约 {pack['zip_mb_hint']} MB）。"
+                       "请到「内核管理」页点「下载并安装」，或用「指定本地 zip」离线安装。"),
+        }
+    # 运行时包装好后仍要能从 sys.path 找到 camoufox；没找到说明本进程是安装前启动的
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("camoufox") is None:
+            return {**base, "ready": False,
+                    "reason": "浏览器运行时已安装，但当前进程还没加载它。请从托盘完全退出后重新启动应用。"}
+    except Exception as exc:
+        return {**base, "ready": False, "reason": f"浏览器运行时加载失败（{exc}），请重启应用。"}
+
     if kernel is None:
         return {
-            "ready": False,
+            **base, "ready": False,
             "reason": "浏览器内核尚未安装，请到「内核管理」页下载（约 1.3GB，保留完整字库）",
-            "parts": parts,
         }
     missing = [k for k, v in parts.items() if not v]
     return {
+        **base,
         "ready": True,
         "reason": "" if not missing else "缺：" + "、".join(missing) + "（不影响启动，时区不自动跟随 IP）",
-        "parts": parts,
         "kernel": kernel.parent.name,
         "geoip": parts["GeoIP 库"],
     }
@@ -495,6 +510,7 @@ def automation_info():
             "POST /api/profiles/{id}/start",
             "POST /api/profiles/{id}/stop",
             "GET  /api/kernel/status",
+            "GET  /api/runtime/status",
         ],
         "curl": f'curl -H "X-FP-Token: {token}" http://{HOST}:{port}/api/profiles',
         "cli": "指纹环境管理器.exe --cli list",
@@ -513,6 +529,35 @@ def shutdown():
 
     threading.Thread(target=_later, daemon=True).start()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- 浏览器运行时包
+
+@app.get("/api/runtime/status")
+def runtime_status():
+    """只读查询。绝不触发下载。"""
+    return runtime_pack.status()
+
+
+@app.get("/api/runtime/progress")
+def runtime_progress():
+    return runtime_pack.progress()
+
+
+@app.post("/api/runtime/install")
+def runtime_install(payload: dict):
+    r = runtime_pack.install(
+        local_zip=str(payload.get("local_zip") or ""),
+        proxy=str(payload.get("proxy") or ""),
+    )
+    if not r.get("ok"):
+        raise HTTPException(409, r["error"])
+    return r
+
+
+@app.post("/api/runtime/cancel")
+def runtime_cancel():
+    return runtime_pack.cancel()
 
 
 # ---------------------------------------------------------------- 内核管理

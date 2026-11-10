@@ -150,6 +150,50 @@ def main() -> int:
     except Exception as e:
         chk("kernel/status", False, str(e))
 
+    print("=== 浏览器运行时包（按需安装，用本地 zip 离线装） ===", flush=True)
+    try:
+        ZIP = ROOT / "dist" / "runtime-extra-v1.zip"
+        s = requests.get(B + "/api/runtime/status", headers=H, timeout=10).json()
+        chk("运行时包初始未安装", s["installed"] is False, str(s.get("modules")))
+        chk("固定 tag 与下载直链",
+            s["tag"] == "runtime-v1"
+            and s["url"] == "https://github.com/aucrazy-p/Camoufox/releases/download/runtime-v1/runtime-extra-v1.zip",
+            s["url"])
+        chk("查状态绝不自动下载", s["auto_install"] is False, str(s["auto_install"]))
+        h = requests.get(B + "/api/health", timeout=10).json()["camoufox"]
+        chk("health 提示先装运行时",
+            h["parts"]["浏览器运行时"] is False and "运行时未安装" in h["reason"], h["reason"][:50])
+
+        r = requests.post(B + "/api/runtime/install", headers=H,
+                          json={"local_zip": str(ZIP)}, timeout=10)
+        chk("发起本地 zip 安装", r.status_code == 200 and r.json().get("ok") is True,
+            f"status={r.status_code}")
+        phase = ""
+        for _ in range(180):
+            p = requests.get(B + "/api/runtime/progress", headers=H, timeout=10).json()
+            phase = p.get("phase", "")
+            if phase in ("done", "error", "idle"):
+                break
+            time.sleep(1)
+        chk("安装完成", phase == "done",
+            requests.get(B + "/api/runtime/progress", headers=H, timeout=10).json().get("error", phase))
+
+        s2 = requests.get(B + "/api/runtime/status", headers=H, timeout=10).json()
+        chk("装后状态=已安装", s2["installed"] is True, f"size={s2.get('size_mb')}MB")
+        chk("关键模块全部就位", all(s2["modules"].values()),
+            ",".join(k for k, v in s2["modules"].items() if not v))
+        chk("版本标记匹配", (FRESH / "runtime-extra" / ".pack-version").read_text(
+            encoding="utf-8").strip() == "runtime-v1")
+        k2 = requests.get(B + "/api/kernel/status", headers=H, timeout=10).json()
+        chk("kernel/status 感知运行时", k2.get("runtime_pack") is True, str(k2.get("runtime_pack")))
+        h2 = requests.get(B + "/api/health", timeout=10).json()["camoufox"]
+        chk("sys.path 注入即时生效",
+            h2["parts"]["浏览器运行时"] is True and "没加载" not in h2["reason"], h2["reason"][:60])
+        chk("下一步引导指向内核",
+            "内核尚未安装" in h2["reason"], h2["reason"][:60])
+    except Exception as e:
+        chk("运行时包", False, f"{type(e).__name__}: {e}")
+
     print("=== 接口与主题持久化 ===", flush=True)
     try:
         chk("profiles 为空数组", requests.get(B + "/api/profiles", headers=H, timeout=10).json() == [])

@@ -174,7 +174,7 @@ def choose_zip():
         import webview
         r = webview.create_file_dialog(
             webview.OPEN_DIALOG, allow_multiple=False,
-            file_types=("Camoufox 内核压缩包 (*.zip)",),
+            file_types=("ZIP 压缩包 (*.zip)",),
         )
         return r[0] if r else None
     except Exception as exc:

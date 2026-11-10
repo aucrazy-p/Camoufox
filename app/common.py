@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import sys
 import threading
 from pathlib import Path
 
@@ -64,6 +65,12 @@ KERNEL_DIR = APP_DATA / "camoufox" / "Cache"
 DB_PATH = DATA / "app.db"
 SETTINGS_PATH = DATA / "settings.json"
 RUNTIME_JSON = DATA / "runtime.json"
+
+# 浏览器运行时包：Playwright 的 Node driver / numpy / fpgen / camoufox。
+# 这些不进 exe，首次使用由用户在界面手动装到这个目录，之后常驻、换 exe 不重装。
+# tag 与 _tools/build.py 的 RUNTIME_TAG 必须一致：exe 内置固定 tag，不追 latest。
+RUNTIME_TAG = "runtime-v1"
+RUNTIME_EXTRA = DATA / "runtime-extra"
 
 RESOURCES = ROOT / "resources"          # 字体黑名单、版本清单等只读资源
 ASSETS = BASE / "assets"                # 图标
@@ -116,8 +123,38 @@ def _redirect_platformdirs() -> None:
     platformdirs._fp_redirected = True
 
 
+def runtime_pack_ready() -> bool:
+    """运行时包是否已装且版本与当前 exe 匹配。只看标记文件，不 import 任何包。"""
+    try:
+        return (RUNTIME_EXTRA / ".pack-version").read_text(encoding="utf-8").strip() == RUNTIME_TAG
+    except (OSError, ValueError):
+        return False
+
+
+def refresh_runtime_path() -> bool:
+    """把已安装的浏览器运行时目录注入 sys.path。幂等，安装后可再调一次立即生效。
+
+    exe 内嵌 Python 的 _pth 只认 runtime\\Lib\\site-packages；拆出去的依赖在
+    CamoufoxData\\runtime-extra，必须显式加进来。主进程（app.py）和浏览器子进程
+    （runner.py）都会调 prepare_env()，所以两边同时生效。
+    """
+    p = str(RUNTIME_EXTRA)
+    if not RUNTIME_EXTRA.is_dir():
+        return False
+    if p not in sys.path:
+        sys.path.insert(0, p)
+    try:
+        import importlib
+
+        sys.path_importer_cache.pop(p, None)
+        importlib.invalidate_caches()
+    except Exception:
+        pass
+    return True
+
+
 def prepare_env() -> None:
-    """创建数据目录并接管 Camoufox 路径解析。幂等，绝不改 LOCALAPPDATA。"""
+    """创建数据目录、接管 Camoufox 路径解析、挂上外部运行时。幂等，绝不改 LOCALAPPDATA。"""
     global _prepared
     for d in (DATA, PROFILES, KERNEL_ROOT, TRASH, LOGS, DOWNLOADS, APP_DATA,
               DATA / "webview2", DATA / "tmp"):
@@ -125,6 +162,7 @@ def prepare_env() -> None:
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     _redirect_platformdirs()
+    refresh_runtime_path()
     _prepared = True
 
 

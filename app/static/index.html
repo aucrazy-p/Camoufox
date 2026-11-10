@@ -40,7 +40,7 @@ window.__FP_TOKEN__ = "@@FP_TOKEN@@";
     <!-- 左侧窄图标栏 -->
     <aside id="sidebar">
       <button class="side-btn active" data-view="profiles" title="环境"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5l-2 5-5 2 2-5z"/></svg></button>
-      <button class="side-btn" data-view="kernel" title="内核管理"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="side-btn" data-view="kernel" title="内核与运行时"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/></svg></button>
       <button class="side-btn" data-view="automation" title="自动化"><svg viewBox="0 0 24 24" class="ico"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6M14 4l-4 16"/></svg></button>
       <button class="side-btn" data-view="logs" title="日志"><svg viewBox="0 0 24 24" class="ico"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></button>
       <div class="side-spacer"></div>
@@ -79,7 +79,21 @@ window.__FP_TOKEN__ = "@@FP_TOKEN@@";
 
       <!-- ============ 内核管理 ============ -->
       <section class="view" id="view-kernel" hidden>
-        <div class="page-head"><h2>内核管理</h2><p class="muted">程序本身不含浏览器内核。首次使用需下载约 1.3GB；保留完整三系统字库（约 2.5GB），不做裁剪。</p></div>
+        <div class="page-head"><h2>内核与运行时</h2><p class="muted">管理端 exe 只有约 20MB。首次使用需手动装两样：<b>浏览器运行时</b>（约 70MB，只装一次）和 <b>浏览器内核</b>（约 1.3GB，完整三系统字库、不裁剪）。两样都不会自动下载。</p></div>
+        <div class="card" id="runtime-card">
+          <div class="card-head"><h3>① 浏览器运行时</h3><div class="grow"></div><span id="rt-badge" class="badge">检查中…</span></div>
+          <div class="kv-grid" id="rt-kv"></div>
+          <p class="muted" style="margin:10px 0">Playwright 的 Node driver、numpy、指纹模型等拆成单独的运行包，装到 <code>CamoufoxData\runtime-extra\</code>，换 exe 不重装。来源固定为本仓库 Releases 的 <code>runtime-v1</code>；下载失败只提示、<b>不会自动尝试第三方镜像</b>。下载代理复用下方「下载与升级」里的设置。</p>
+          <div class="card-head">
+            <button class="btn" id="btn-rt-install">下载并安装</button>
+            <button class="btn" id="btn-rt-local">指定本地 zip</button>
+          </div>
+          <div id="rt-box" class="dl-box" hidden>
+            <div class="dl-head"><span id="rt-msg">准备中</span><span id="rt-pct">0%</span></div>
+            <div class="progress"><div id="rt-bar"></div></div>
+            <button class="btn small" id="btn-rt-cancel">取消</button>
+          </div>
+        </div>
         <div class="card" id="kernel-card"><div class="kv-grid" id="kernel-kv"></div></div>
         <div class="card" id="upgrade-card">
           <div class="card-head"><h3>升级提示</h3><div class="grow"></div><span id="upgrade-badge" class="badge">检查中…</span></div>
@@ -143,19 +157,18 @@ window.__FP_TOKEN__ = "@@FP_TOKEN@@";
     </main>
   </div>
 
-  <!-- 首次使用的内核安装引导 -->
+  <!-- 首次使用的安装引导 -->
   <div id="onboarding" class="modal" hidden>
     <div class="modal-box">
-      <h2>首次使用：需要下载浏览器内核</h2>
-      <p>控制程序不含内核，以保持安装包小巧、并支持独立升级。首次启动需要：</p>
+      <h2>首次使用：需要手动装两样</h2>
+      <p>管理端 exe 很小，浏览器相关组件按需下载、都只装一次。按顺序来：</p>
       <ul>
-        <li>下载官方 Windows x64 内核 <b>约 1,259 MB</b></li>
-        <li>解压后约 <b>2.5GB</b>，保留完整三系统字库（不裁剪）</li>
-        <li>另需约 50MB GeoIP 数据库，用于时区/语言跟随出口 IP</li>
-        <li>安装过程峰值需要约 <b>3.8GB</b> 可用磁盘空间</li>
+        <li><b>① 浏览器运行时</b> 约 <b>70 MB</b> —— Playwright / 指纹模型，从本仓库 Releases 的 <code>runtime-v1</code> 拉取；也可指定本地 zip 离线装</li>
+        <li><b>② 浏览器内核</b> 约 <b>1,259 MB</b> —— 官方 Windows x64 内核，解压后约 2.5GB，保留完整三系统字库（不裁剪）</li>
+        <li>内核安装时另需约 50MB GeoIP 库，峰值约 <b>3.8GB</b> 可用磁盘</li>
       </ul>
-      <p class="muted">下载只从官方 Releases 拉取，失败不会自动尝试第三方镜像。你可以稍后在「内核管理」里手动开始。</p>
-      <div class="modal-foot"><button class="btn" id="ob-later">稍后再说</button><button class="btn-primary" id="ob-go">去内核管理</button></div>
+      <p class="muted">两样都不会自动下载，必须你手动点按钮；失败只提示，不会自动尝试第三方镜像。可以稍后在「内核与运行时」页开始。</p>
+      <div class="modal-foot"><button class="btn" id="ob-later">稍后再说</button><button class="btn-primary" id="ob-go">去内核与运行时</button></div>
     </div>
   </div>
 
