@@ -202,10 +202,19 @@ def _camoufox_status() -> dict:
             "reason": "浏览器内核尚未安装，请到「内核管理」页下载（约 1.3GB，保留完整字库）",
         }
     missing = [k for k, v in parts.items() if not v]
+    if missing:
+        note = []
+        if "指纹模型" in missing:
+            note.append("指纹模型未就位——首次启动环境时会自动补齐（约 1.5MB，带校验），无需手动安装")
+        if "GeoIP 库" in missing:
+            note.append("GeoIP 未装，时区不自动跟随 IP（装内核时会顺手补齐）")
+        reason = "；".join(note)
+    else:
+        reason = ""
     return {
         **base,
         "ready": True,
-        "reason": "" if not missing else "缺：" + "、".join(missing) + "（不影响启动，时区不自动跟随 IP）",
+        "reason": reason,
         "kernel": kernel.parent.name,
         "geoip": parts["GeoIP 库"],
     }

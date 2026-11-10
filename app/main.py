@@ -169,11 +169,19 @@ def window_action(action: str) -> str:
 
 
 def choose_zip():
-    """选本地内核 zip，返回路径字符串（或 None）。"""
+    """选本地 zip，返回路径字符串（或 None）。
+
+    注意：pywebview 5.0 起 create_file_dialog 是 **Window 的方法**，
+    模块级 webview.create_file_dialog 已被移除——用老写法会
+    AttributeError（被 _fatal 吞进日志，前端表现为「点了没反应」）。
+    """
     try:
         import webview
-        r = webview.create_file_dialog(
-            webview.OPEN_DIALOG, allow_multiple=False,
+        win = _STATE.get("win")
+        if win is None:
+            return None
+        r = win.create_file_dialog(
+            webview.FileDialog.OPEN, allow_multiple=False,
             file_types=("ZIP 压缩包 (*.zip)",),
         )
         return r[0] if r else None

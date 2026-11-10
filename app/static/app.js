@@ -334,7 +334,8 @@ async function loadKernel() {
       ['升级策略', s.auto_install ? '<span class="badge warn">自动安装</span>' : '<span class="badge ok">只提示，不自动装</span>'],
       ['安装路径', esc(s.path || '—')],
       ['占用体积', s.size_mb ? s.size_mb + ' MB' : '—'],
-      ['指纹模型', yes(s.fpgen)], ['GeoIP 数据库', yes(s.geoip)],
+      ['指纹模型', yes(s.fpgen) + (s.fpgen ? '' : ' <span class="muted">首次启动环境时自动补齐（约 1.5MB）</span>')],
+      ['GeoIP 数据库', yes(s.geoip) + (s.geoip ? '' : ' <span class="muted">装内核时顺手补齐（约 50MB）</span>')],
       ['可用磁盘', (s.free_mb / 1024).toFixed(1) + ' GB'],
     ].map(([k, v]) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   } catch (e) { toast('读取内核状态失败：' + e.message, 5000); }

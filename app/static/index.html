@@ -163,7 +163,7 @@ window.__FP_TOKEN__ = "@@FP_TOKEN@@";
       <h2>首次使用：需要手动装两样</h2>
       <p>管理端 exe 很小，浏览器相关组件按需下载、都只装一次。按顺序来：</p>
       <ul>
-        <li><b>① 浏览器运行时</b> 约 <b>70 MB</b> —— Playwright / 指纹模型，从本仓库 Releases 的 <code>runtime-v1</code> 拉取；也可指定本地 zip 离线装</li>
+        <li><b>① 浏览器运行时</b> 约 <b>70 MB</b> —— Playwright 的 Node driver / numpy 等，从本仓库 Releases 的 <code>runtime-v1</code> 拉取；也可指定本地 zip 离线装。指纹模型（约 1.5MB）不在包内，首次启动环境时自动补齐</li>
         <li><b>② 浏览器内核</b> 约 <b>1,259 MB</b> —— 官方 Windows x64 内核，解压后约 2.5GB，保留完整三系统字库（不裁剪）</li>
         <li>内核安装时另需约 50MB GeoIP 库，峰值约 <b>3.8GB</b> 可用磁盘</li>
       </ul>
