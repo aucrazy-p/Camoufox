@@ -269,6 +269,44 @@ def inject_config(env: dict, config_json: str) -> None:
         env[f"CAMOU_CONFIG_{i // chunk + 1}"] = config_json[i : i + chunk]
 
 
+def _ensure_plain_values_dat() -> None:
+    """数据目录含非 ASCII 字符时，把 values.dat.zst 解压成明文。
+
+    indexed_zstd 是 C 扩展，用 ANSI 代码页打开文件，读不了中文路径
+    （报 Unable to create a ZSTDSeekContext）。values.dat 在 camoufox
+    的解压白名单里（PIN.decompressed_sha256），存在明文时 fpgen 改用
+    Python 原生 open，彻底绕开 C 扩展的路径限制。
+    """
+    from camoufox import fpgen_model as _fm
+
+    data_dir = _fm.fpgen_data_dir()
+    try:
+        if str(data_dir).isascii():
+            return
+        zst, plain = data_dir / "values.dat.zst", data_dir / "values.dat"
+        expect = _fm.PIN.get("decompressed_sha256", {}).get("values.dat")
+        if not zst.exists() or plain.exists() or not expect:
+            return
+        import hashlib
+
+        import zstandard
+
+        dctx = zstandard.ZstdDecompressor()
+        with open(zst, "rb") as fh, open(plain, "wb") as out:
+            dctx.copy_stream(fh, out)
+        got = hashlib.sha256(plain.read_bytes()).hexdigest()
+        if got != expect:
+            plain.unlink(missing_ok=True)
+            raise SystemExit(f"指纹模型明文校验失败，请删除 {data_dir} 后重试")
+        log("数据目录含中文: 已解压明文 values.dat（绕开 C 扩展读不了中文路径的限制）")
+    except SystemExit:
+        raise
+    except Exception as exc:
+        # 兜底失败不拦启动：ASCII 路径或已有明文时这里根本不会执行；
+        # 真失败时把原因写日志，让后续原生报错自然浮出
+        log(f"指纹模型明文预处理跳过: {type(exc).__name__}: {exc}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit("用法: python runner.py <profile_id>")
@@ -309,8 +347,13 @@ def _run(profile_id: str, profile_dir: Path) -> None:
         )
 
     from camoufox.fingerprints import Screen, generate_fingerprint
+    from camoufox.fpgen_model import ensure_fpgen_model
     from camoufox.utils import launch_options
     from playwright.sync_api import sync_playwright
+
+    # 模型先补齐 + 中文路径绕行（放显式调用才能在指纹生成前完成预处理）
+    ensure_fpgen_model()
+    _ensure_plain_values_dat()
 
     _install_host_gpu_cache()
 
