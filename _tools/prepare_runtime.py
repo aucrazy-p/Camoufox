@@ -24,6 +24,14 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# Windows 控制台默认 cp1252/cp936；CI runner 是 cp1252，中文 print 会
+# UnicodeEncodeError 直接崩（连报错都打不出来）。强制 UTF-8 输出。
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass
+
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "runtime"
 REQS = ROOT / "requirements-build.txt"

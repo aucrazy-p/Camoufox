@@ -29,6 +29,11 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 40
+    # windows runner 的控制台默认 cp1252，脚本里大量中文 print 会直接
+    # UnicodeEncodeError 崩溃（2026-11-10 首跑实锤）。强制 UTF-8 输出。
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
