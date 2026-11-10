@@ -67,6 +67,9 @@ config.json
 /_tools/7z*/
 /_tools/7z*.7z
 /_tools/icons/
+/_tools/wheels/
+/_tools/sfx_*/
+/_tools/*.exe
 /_tools/hello.py
 /_tools/hello.spec
 /_tools/fetch_7z.py
