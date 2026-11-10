@@ -227,8 +227,11 @@ def build_runtime_pack() -> tuple[Path, Path]:
     Release 上的 sha256 才可复验。zip 根就是解压后的 sys.path 目录。
     """
     DIST.mkdir(exist_ok=True)
+    # fpgen/data（指纹模型，约1.5MB）不在此列：它不在 PyPI wheel 里，
+    # 是运行期由 camoufox.fpgen_model.ensure_fpgen_model() 按需下载的
+    # 运行期数据（与内核 / GeoIP 同模式），CI 全新环境本来就没有。
     must = ("playwright/driver/node.exe", "camoufox/utils.py",
-            "numpy/__init__.py", "fpgen/data", ".pack-version")
+            "numpy/__init__.py", "fpgen/__init__.py", ".pack-version")
     for m in must:
         if not (EXTRA_STAGE / m).exists():
             raise RuntimeError(f"运行时包缺少 {m}：拆分清单漏了依赖？")
