@@ -48,7 +48,8 @@ def main() -> int:
     proc = subprocess.Popen([str(EXE)], env=env, cwd=str(ROOT))
     rt_file = FRESH / "runtime.json"
     rt = None
-    for _ in range(180):
+    # 首次启动可能被杀软全量扫描新解压文件拖到 2 分钟以上，等待窗口给足
+    for _ in range(480):
         if rt_file.exists():
             try:
                 cand = json.loads(rt_file.read_text(encoding="utf-8"))

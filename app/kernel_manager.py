@@ -321,13 +321,15 @@ def _install_worker(version: str, local_zip: str, proxy: str) -> None:
         _check_cancel()
         staged = common.DOWNLOADS / "_staged"
         kernel_dir = _extract(zip_path, staged)
+        # 平铺结构的 zip（文件直接在顶层、无顶层文件夹）解出来就是暂存
+        # 目录本身，此时版本名从 zip 文件名取；目录名会是 "_staged"
+        name = zip_path.stem if kernel_dir == staged else kernel_dir.name
         # 不再裁剪字库：完整保留三套字体，macOS / Linux 身份也能正常渲染
         fonts = inspect_fonts(kernel_dir)
         _log(f"字库: {fonts['files']} 个文件 / {fonts['size_mb']} MB（{fonts['label']}）")
         _check_cancel()
 
         _set(phase="installing", percent=82, message="安装内核（原子替换）")
-        name = kernel_dir.name
         target = common.KERNEL_ROOT / name
         common.KERNEL_ROOT.mkdir(parents=True, exist_ok=True)
         if target.exists():

@@ -43,7 +43,12 @@ def main() -> int:
         data_dir.mkdir(parents=True, exist_ok=True)
         probe = data_dir / ".write_test"
         probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
+        try:
+            probe.unlink()
+        except PermissionError:
+            # 杀软实时扫描可能短暂占住刚创建的文件导致删除被拒；
+            # 写入成功已证明目录可写，残留文件下次启动覆盖，不因此拦启动
+            pass
         tmp_dir = data_dir / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
