@@ -74,9 +74,12 @@ python _tools\prepare_runtime.py --version 3.13.14
 
 `build.yml` **只有 `workflow_dispatch`**，没有 push / PR / 定时触发：任何构建都必须由人在仓库 Actions 页面点「Run workflow」发起。流程是 setup-python 3.13 → 装构建依赖 → 重建内嵌运行时 → `build.py` 一次产出 exe + zip + sha256 → 三个文件一起存为构建产物（保留 90 天）。
 
-**默认不创建 Release、不对外发布。** 需要把运行时包挂到 Releases 时，在同一个 Run workflow 里手动勾选 `publish_release`；该步骤才会用 `GITHUB_TOKEN` 建/更新 tag `runtime-v1` 并上传 zip + sha256（`--clobber` 覆盖同名资产）。exe 本身永远不发 Release。
+**默认不创建 Release、不对外发布。** 需要发布时，在 Run workflow 里手动勾选 `publish_release`，该步骤才会用 `GITHUB_TOKEN` 做两件事（都是 `--clobber` 覆盖同名资产，下载地址固定不变）：
 
-发布用的 tag 必须和 `app/common.py` 的 `RUNTIME_TAG`、`_tools/build.py` 的 `RUNTIME_TAG` 一致；只有升级 Playwright / camoufox / numpy 这类依赖时才需要改常量、发新 tag 并重新发布。日常改管理端代码只需重建 exe，不用碰 Release。
+1. 运行时包 → tag `runtime-v1`（zip + sha256，程序内置下载地址）
+2. 控制端 exe → tag `app-latest`（永久可下载，标题自动带上 `app/common.py` 里的 `VERSION`）
+
+发布用的 runtime-v1 必须和 `app/common.py` 的 `RUNTIME_TAG`、`_tools/build.py` 的 `RUNTIME_TAG` 一致；只有升级 Playwright / camoufox / numpy 这类依赖时才需要改常量、发新 tag 并重新发布。日常改管理端代码只需重建 exe，勾一次 publish_release 即可同步更新 app-latest。
 
 单次构建会下载：Python embeddable 约 11 MB、pip 依赖约 100 MB、actions 自带工具。不含 1.31 GB 浏览器内核。
 

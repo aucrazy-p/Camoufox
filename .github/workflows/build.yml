@@ -16,7 +16,7 @@ on:
         default: true
         type: boolean
       publish_release:
-        description: '【对外发布】把浏览器运行时包发布/更新到 Release 的 runtime-v1（默认关闭）'
+        description: '【对外发布】发布/更新 Release：runtime-v1 运行时包 + app-latest 控制端 exe（默认关闭）'
         required: false
         default: false
         type: boolean
@@ -93,9 +93,10 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # 只有手动勾选 publish_release 才会执行。绝不自动建 Release、绝不自动发布 exe。
-      # tag 与 app/common.py 的 RUNTIME_TAG、_tools/build.py 的 RUNTIME_TAG 必须一致。
-      - name: 发布浏览器运行时包到 Release（已勾选）
+      # 只有手动勾选 publish_release 才会执行。绝不自动建 Release。
+      # runtime-v1 tag 与 app/common.py 的 RUNTIME_TAG、_tools/build.py 的 RUNTIME_TAG 必须一致。
+      # app-latest 是固定 tag：每次发布覆盖 exe 资产，下载地址永远不变。
+      - name: 发布浏览器运行时包与控制端 exe 到 Release（已勾选）
         if: ${{ inputs.publish_release }}
         shell: pwsh
         env:
@@ -106,6 +107,8 @@ jobs:
           # pwsh 7.3+ 默认会把它当错误抛出，显式关掉才能用 $LASTEXITCODE 判断。
           $ErrorActionPreference = 'continue'
           $PSNativeCommandUseErrorActionPreference = $false
+
+          # ---------- 1. 浏览器运行时包 → runtime-v1 ----------
           $tag  = 'runtime-v1'
           $zip  = 'dist/runtime-extra-v1.zip'
           $sha  = 'dist/runtime-extra-v1.zip.sha256'
@@ -122,3 +125,20 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw '创建 Release 失败' }
           }
           gh release view $tag --json assets --jq '.assets[].name'
+
+          # ---------- 2. 控制端 exe → app-latest（固定 tag，永久可下载） ----------
+          $ver = (Select-String -Path 'app/common.py' -Pattern 'VERSION\s*=\s*"([^"]+)"').Matches.Groups[1].Value
+          if (-not $ver) { throw 'app/common.py 里读不到 VERSION' }
+          $exeTag = 'app-latest'
+          $exe = 'dist/指纹环境管理器.exe'
+          $notes = "控制端 exe v$ver（手动构建）。运行时包与内核首次启动在界面内按需下载。"
+          gh release view $exeTag --json tagName | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $exeTag $exe --clobber
+            if ($LASTEXITCODE -ne 0) { throw '上传 exe 失败' }
+            gh release edit $exeTag --title "控制端 exe（v$ver）" --notes $notes | Out-Null
+          } else {
+            gh release create $exeTag --title "控制端 exe（v$ver）" --notes $notes $exe
+            if ($LASTEXITCODE -ne 0) { throw '创建 exe Release 失败' }
+          }
+          gh release view $exeTag --json assets --jq '.assets[].name'
