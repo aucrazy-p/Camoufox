@@ -99,9 +99,10 @@ def main() -> int:
         if not (RUNTIME / name).is_file():
             raise RuntimeError(f"runtime 缺少 {name}")
 
+    # 注意：pywebview 的包名叫 pywebview，import 名是 webview；其余按 import 名写
     probe = (
         "import fastapi, uvicorn, camoufox, playwright, requests, "
-        "pywebview, pystray, PIL, numpy; print('runtime import OK')"
+        "webview, pystray, PIL, numpy; print('runtime import OK')"
     )
     subprocess.check_call([str(RUNTIME / "python.exe"), "-c", probe])
     print(f"runtime 准备完成: {RUNTIME}", flush=True)
