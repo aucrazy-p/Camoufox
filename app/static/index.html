@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>指纹环境管理器</title>
+<script>
+// 主题必须在页面渲染前定好，避免切换时闪一下
+(function(){
+  var t = localStorage.getItem('fp-theme') || 'dark';
+  if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+window.__FP_TOKEN__ = "@@FP_TOKEN@@";
+</script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 自定义标题栏：分组 + 搜索 + 新建 + 窗口按钮 -->
+  <header id="titlebar" class="pywebview-drag-region">
+    <div class="tb-left">
+      <div class="brand"><span class="brand-dot"></span><span>指纹环境管理器</span></div>
+      <nav id="tabs" class="tabs"></nav>
+    </div>
+    <div class="tb-right">
+      <label class="search"><svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="search" placeholder="搜索配置文件..." autocomplete="off"></label>
+      <button class="icon-btn" id="btn-help" title="帮助">?</button>
+      <button class="btn-primary" id="btn-new"><span>＋</span> 新建</button>
+      <div class="win-btns">
+        <button class="win-btn" id="win-min" title="最小化">−</button>
+        <button class="win-btn" id="win-max" title="最大化">□</button>
+        <button class="win-btn close" id="win-close" title="关闭">×</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="body-row">
+    <!-- 左侧窄图标栏 -->
+    <aside id="sidebar">
+      <button class="side-btn active" data-view="profiles" title="环境"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5l-2 5-5 2 2-5z"/></svg></button>
+      <button class="side-btn" data-view="kernel" title="内核管理"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="side-btn" data-view="automation" title="自动化"><svg viewBox="0 0 24 24" class="ico"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6M14 4l-4 16"/></svg></button>
+      <button class="side-btn" data-view="logs" title="日志"><svg viewBox="0 0 24 24" class="ico"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></button>
+      <div class="side-spacer"></div>
+      <button class="side-btn" data-view="settings" title="设置"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></button>
+    </aside>
+
+    <main id="main">
+
+      <!-- ============ 环境列表 ============ -->
+      <section class="view" id="view-profiles">
+        <div class="toolbar">
+          <button class="tool-btn" id="btn-filter"><svg viewBox="0 0 24 24" class="ico"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg> 筛选</button>
+          <span id="row-count" class="muted">0 行中的 0 行</span>
+          <span class="grow"></span>
+          <button class="tool-btn" id="btn-sort"><svg viewBox="0 0 24 24" class="ico"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg> 名称 ↑</button>
+          <button class="tool-btn" id="btn-refresh"><svg viewBox="0 0 24 24" class="ico"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg> 刷新</button>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead><tr>
+              <th class="c-check"><input type="checkbox" id="check-all"></th>
+              <th class="c-name">名称</th>
+              <th class="c-status">状态</th>
+              <th class="c-tags">标签</th>
+              <th class="c-note">备注</th>
+              <th class="c-proxy">代理 / 出口 IP · 时区</th>
+              <th class="c-fp">指纹</th>
+              <th class="c-kernel">内核</th>
+              <th class="c-info"></th>
+            </tr></thead>
+            <tbody id="grid-body"></tbody>
+          </table>
+          <div id="empty" class="empty" hidden>还没有环境，点右上角「＋ 新建」创建第一个。</div>
+        </div>
+      </section>
+
+      <!-- ============ 内核管理 ============ -->
+      <section class="view" id="view-kernel" hidden>
+        <div class="page-head"><h2>内核管理</h2><p class="muted">程序本身不含浏览器内核。首次使用需下载约 1.3GB；保留完整三系统字库（约 2.5GB），不做裁剪。</p></div>
+        <div class="card" id="kernel-card"><div class="kv-grid" id="kernel-kv"></div></div>
+        <div class="card" id="upgrade-card">
+          <div class="card-head"><h3>升级提示</h3><div class="grow"></div><span id="upgrade-badge" class="badge">检查中…</span></div>
+          <div id="upgrade-msg" class="muted">正在从官方 Releases 只读查询版本信息，不会下载任何文件。</div>
+        </div>
+        <div class="warn-box">⚠ 默认<b>只提示、不自动安装</b>。发现新版本也只会在这里显示，必须你手动点「安装此版本」并二次确认才会下载。更换内核会改变 UA 版本等运行时读数，已登录账号升级前建议先确认。</div>
+        <div class="card">
+          <div class="card-head"><h3>下载与升级</h3><div class="grow"></div>
+            <button class="btn" id="btn-check-rel">检查新版本</button>
+            <button class="btn" id="btn-local-zip">指定本地 zip</button>
+            <button class="btn" id="btn-rollback">回滚旧版</button>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>下载代理（可选）</span><input id="kernel-proxy" placeholder="例如 http://127.0.0.1:7890；本机代理端口按实际填写"></label>
+          </div>
+          <p class="muted" style="margin:0 0 10px">程序不读取系统代理，留空即直连。国内直连 GitHub 资产常出现「连接被重置 / 超时」，需在这里填本机代理；在「设置 → 网络」保存一次可长期记住。若仍失败，可手动下载 zip 后用「指定本地 zip」离线安装。</p>
+          <div id="rel-list" class="rel-list muted">点「检查新版本」从官方 Releases 获取列表。</div>
+          <div id="dl-box" class="dl-box" hidden>
+            <div class="dl-head"><span id="dl-msg">准备中</span><span id="dl-pct">0%</span></div>
+            <div class="progress"><div id="dl-bar"></div></div>
+            <button class="btn small" id="btn-cancel-dl">取消</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 自动化 ============ -->
+      <section class="view" id="view-automation" hidden>
+        <div class="page-head"><h2>自动化接口</h2><p class="muted">本期只预留接口，不写业务。服务发现文件写在数据目录，外部脚本可直接调用。</p></div>
+        <div class="card" id="auto-card"></div>
+      </section>
+
+      <!-- ============ 日志 ============ -->
+      <section class="view" id="view-logs" hidden>
+        <div class="page-head"><h2>运行日志</h2><p class="muted">程序没有控制台窗口，所有异常与内核安装记录都落在这里。</p></div>
+        <div class="card"><div class="card-head"><h3>kernel.log</h3><div class="grow"></div>
+          <button class="btn" id="btn-log-path">复制路径</button>
+          <button class="btn" id="btn-log-copy">复制全部</button>
+          <button class="btn" id="btn-log-refresh">刷新</button></div>
+          <pre id="log-text" class="log-pre"></pre></div>
+      </section>
+
+      <!-- ============ 设置 ============ -->
+      <section class="view" id="view-settings" hidden>
+        <div class="page-head"><h2>设置</h2></div>
+        <div class="card">
+          <h3>外观</h3>
+          <div class="setting"><div><b>主题</b><div class="muted">亮色 / 暗色 / 跟随系统</div></div>
+            <div class="seg" id="seg-theme"><button data-v="dark">暗色</button><button data-v="light">亮色</button><button data-v="system">跟随系统</button></div></div>
+          <h3>窗口行为</h3>
+          <div class="setting"><div><b>点击关闭按钮</b><div class="muted">隐藏到托盘后服务继续运行，浏览器环境不受影响</div></div>
+            <div class="seg" id="seg-close"><button data-v="tray">隐藏到托盘</button><button data-v="exit">直接退出</button></div></div>
+          <div class="setting"><div><b>开机自启</b><div class="muted">登录 Windows 后自动启动（仅打包版生效）</div></div>
+            <label class="switch"><input type="checkbox" id="set-autostart"><span></span></label></div>
+          <h3>网络</h3>
+          <div class="field-row"><label class="field"><span>下载代理</span><input id="set-proxy" placeholder="例如 http://127.0.0.1:7890；留空直连"></label></div>
+          <p class="muted" style="margin:0 0 10px">保存后会同步到「内核管理」的下载代理框，查询版本、下载内核与 GeoIP 都走它。下载失败只提示、不会自动尝试第三方镜像。</p>
+          <div class="card-foot"><button class="btn-primary" id="btn-save-settings">保存设置</button><span id="settings-tip" class="muted"></span></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- 首次使用的内核安装引导 -->
+  <div id="onboarding" class="modal" hidden>
+    <div class="modal-box">
+      <h2>首次使用：需要下载浏览器内核</h2>
+      <p>控制程序不含内核，以保持安装包小巧、并支持独立升级。首次启动需要：</p>
+      <ul>
+        <li>下载官方 Windows x64 内核 <b>约 1,259 MB</b></li>
+        <li>解压后约 <b>2.5GB</b>，保留完整三系统字库（不裁剪）</li>
+        <li>另需约 50MB GeoIP 数据库，用于时区/语言跟随出口 IP</li>
+        <li>安装过程峰值需要约 <b>3.8GB</b> 可用磁盘空间</li>
+      </ul>
+      <p class="muted">下载只从官方 Releases 拉取，失败不会自动尝试第三方镜像。你可以稍后在「内核管理」里手动开始。</p>
+      <div class="modal-foot"><button class="btn" id="ob-later">稍后再说</button><button class="btn-primary" id="ob-go">去内核管理</button></div>
+    </div>
+  </div>
+
+  <!-- 编辑抽屉 -->
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-head"><h3 id="drawer-title">新建环境</h3><button class="icon-btn" id="drawer-close">×</button></div>
+    <div class="drawer-body">
+      <label class="field"><span>名称</span><input id="f-name" placeholder="例如 US1"></label>
+      <div class="field-row">
+        <label class="field"><span>分组</span><input id="f-group" placeholder="工作 / 个人 / 调研"></label>
+        <label class="field"><span>标签（逗号分隔）</span><input id="f-tags" placeholder="店铺,欧盟"></label>
+      </div>
+      <label class="field"><span>备注</span><input id="f-note" placeholder="选填"></label>
+      <h4>代理</h4>
+      <div class="field-row">
+        <label class="field w90"><span>类型</span><select id="f-scheme"><option value="socks5">socks5</option><option value="http">http</option><option value="https">https</option></select></label>
+        <label class="field"><span>主机</span><input id="f-host" placeholder="127.0.0.1"></label>
+        <label class="field w90"><span>端口</span><input id="f-port" placeholder="1080"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>用户名（可选）</span><input id="f-user"></label>
+        <label class="field"><span>密码（可选）</span><input id="f-pass" type="password"></label>
+      </div>
+      <h4>设备指纹</h4>
+      <div class="field-row">
+        <label class="field"><span>系统</span><select id="f-os">
+          <option value="windows">Windows</option>
+          <option value="macos">macOS</option>
+          <option value="linux">Linux</option>
+        </select></label>
+        <label class="field"><span>语言</span>
+          <select id="f-locale">
+            <optgroup label="英语">
+              <option value="en-US">en-US · 美国</option>
+              <option value="en-GB">en-GB · 英国</option>
+              <option value="en-CA">en-CA · 加拿大</option>
+              <option value="en-AU">en-AU · 澳大利亚</option>
+            </optgroup>
+            <optgroup label="中文">
+              <option value="zh-CN">zh-CN · 简体（中国大陆）</option>
+              <option value="zh-TW">zh-TW · 繁体（中国台湾）</option>
+              <option value="zh-HK">zh-HK · 繁体（中国香港）</option>
+            </optgroup>
+            <optgroup label="日语 / 韩语">
+              <option value="ja-JP">ja-JP · 日本</option>
+              <option value="ko-KR">ko-KR · 韩国</option>
+            </optgroup>
+            <optgroup label="其他常用">
+              <option value="de-DE">de-DE · 德国</option>
+              <option value="fr-FR">fr-FR · 法国</option>
+              <option value="es-ES">es-ES · 西班牙</option>
+              <option value="es-US">es-US · 美国西班牙语</option>
+              <option value="pt-BR">pt-BR · 巴西</option>
+              <option value="it-IT">it-IT · 意大利</option>
+              <option value="ru-RU">ru-RU · 俄罗斯</option>
+              <option value="nl-NL">nl-NL · 荷兰</option>
+            </optgroup>
+            <option value="__custom__">自定义…</option>
+          </select>
+          <input id="f-locale-custom" hidden placeholder="如 en-US / ja-JP / zh-CN">
+        </label>
+      </div>
+      <div id="os-hint" class="drawer-note" hidden></div>
+      <div class="drawer-note">语言决定浏览器界面、<code>navigator.language</code> 和网页首选语言；时区仍由出口 IP 决定，两者不必一致。改语言后下次启动会重算语言配置，设备指纹（UA / 屏幕 / 硬件）不变。已登录的老号建议一次设好、长期固定，别来回切。</div>
+      <div class="field-row">
+        <label class="field"><span>屏幕宽</span><input id="f-sw" type="number" value="1920"></label>
+        <label class="field"><span>屏幕高</span><input id="f-sh" type="number" value="1080"></label>
+      </div>
+      <label class="field"><span>时区</span><input id="f-tz" value="" disabled placeholder="固定留空，由 GeoIP 跟随出口 IP"></label>
+      <div class="drawer-note">时区固定留空：手填会让内核用 <code>setdefault</code> 覆盖 GeoIP 结果，造成「美国 IP + 手填时区」的矛盾。</div>
+      <label class="field"><span>起始网址</span><input id="f-url" value="https://www.google.com"></label>
+      <h4>网络诊断</h4>
+      <div id="net-info" class="net-info muted">尚未启动过，启动环境后这里会显示真实出口 IP、时区和代理状态。</div>
+      <div class="drawer-note">修改屏幕/系统后，已生成过指纹的环境不会自动改变设备身份。重新生成指纹等于「换一台电脑」，已登录账号可能触发验证。</div>
+    </div>
+    <div class="drawer-foot">
+      <button class="btn danger" id="btn-del">删除</button>
+      <span class="grow"></span>
+      <button class="btn" id="btn-cancel">取消</button>
+      <button class="btn-primary" id="btn-save">保存</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
