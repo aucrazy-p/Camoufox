@@ -127,10 +127,16 @@ jobs:
           gh release view $tag --json assets --jq '.assets[].name'
 
           # ---------- 2. 控制端 exe → app-latest（固定 tag，永久可下载） ----------
+          # 资产名必须用 ASCII：中文文件名经 runner 上传会被编码损坏
+          # （GitHub 把资产收成 default.exe，而 default.exe 会被火绒等
+          #  杀软按「流行病毒」名字直接拦截，导致下载后无法启动）。
           $ver = (Select-String -Path 'app/common.py' -Pattern 'VERSION\s*=\s*"([^"]+)"').Matches.Groups[1].Value
           if (-not $ver) { throw 'app/common.py 里读不到 VERSION' }
           $exeTag = 'app-latest'
-          $exe = 'dist/指纹环境管理器.exe'
+          Copy-Item 'dist/指纹环境管理器.exe' 'dist/CamoufoxManager.exe' -Force
+          $exe = 'dist/CamoufoxManager.exe'
+          # 清掉历史坏名资产（不存在则忽略）
+          gh release delete-asset $exeTag default.exe --yes 2>$null
           $notes = "控制端 exe v$ver（手动构建）。运行时包与内核首次启动在界面内按需下载。"
           gh release view $exeTag --json tagName | Out-Null
           if ($LASTEXITCODE -eq 0) {

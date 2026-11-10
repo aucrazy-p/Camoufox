@@ -77,7 +77,9 @@ python _tools\prepare_runtime.py --version 3.13.14
 **默认不创建 Release、不对外发布。** 需要发布时，在 Run workflow 里手动勾选 `publish_release`，该步骤才会用 `GITHUB_TOKEN` 做两件事（都是 `--clobber` 覆盖同名资产，下载地址固定不变）：
 
 1. 运行时包 → tag `runtime-v1`（zip + sha256，程序内置下载地址）
-2. 控制端 exe → tag `app-latest`（永久可下载，标题自动带上 `app/common.py` 里的 `VERSION`）
+2. 控制端 exe → tag `app-latest`（永久可下载，标题自动带上 `app/common.py` 里的 `VERSION`）。
+   资产名固定为 **`CamoufoxManager.exe`**（ASCII）——中文文件名在 runner 上传时会被编码损坏，
+   曾被 GitHub 收成 `default.exe`，而这个名字会被火绒等杀软按「流行病毒」文件名规则拦截。
 
 发布用的 runtime-v1 必须和 `app/common.py` 的 `RUNTIME_TAG`、`_tools/build.py` 的 `RUNTIME_TAG` 一致；只有升级 Playwright / camoufox / numpy 这类依赖时才需要改常量、发新 tag 并重新发布。日常改管理端代码只需重建 exe，勾一次 publish_release 即可同步更新 app-latest。
 
