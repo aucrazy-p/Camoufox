@@ -14,6 +14,10 @@ import sys
 import time
 from pathlib import Path
 
+# embeddable Python 的 ._pth 不把脚本目录加进 sys.path，显式注入
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import purge  # 临时目录永久删除，不进回收站
+
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / "_tools"
 EXE = ROOT / "dist" / "指纹环境管理器.exe"
@@ -32,7 +36,7 @@ def main() -> int:
     if not EXE.exists():
         print("exe 不存在，请先运行 build.py")
         return 1
-    shutil.rmtree(FRESH, ignore_errors=True)
+    purge.rmtree(FRESH)
     FRESH.mkdir(parents=True)
 
     env = os.environ.copy()

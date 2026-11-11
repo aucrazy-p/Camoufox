@@ -22,10 +22,14 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import purge  # 临时目录永久删除，不进回收站
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / "_tools"
@@ -65,7 +69,7 @@ def main() -> int:
         print("exe 不存在，请先运行 build.py")
         return 1
     assert PROBE.parent == TOOLS and PROBE.name == "portable_probe"
-    shutil.rmtree(PROBE, ignore_errors=True)
+    purge.rmtree(PROBE)
     PROBE.mkdir(parents=True)
     shutil.copy2(EXE, PROBE / EXE.name)
     portable_exe = PROBE / EXE.name

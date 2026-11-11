@@ -24,8 +24,10 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-# Windows 控制台默认 cp1252/cp936；CI runner 是 cp1252，中文 print 会
-# UnicodeEncodeError 直接崩（连报错都打不出来）。强制 UTF-8 输出。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import purge  # runtime/ 重建前永久删除，不进回收站
+
+# Windows 控制台默认 cp1252/cp936；CI runner 是 cp1252，中文 print 会# UnicodeEncodeError 直接崩（连报错都打不出来）。强制 UTF-8 输出。
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")
@@ -68,7 +70,7 @@ def main() -> int:
 
     data = fetch_embed(version)
     if RUNTIME.exists():
-        shutil.rmtree(RUNTIME, ignore_errors=True)
+        purge.rmtree(RUNTIME)
     RUNTIME.mkdir(parents=True)
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         zf.extractall(RUNTIME)

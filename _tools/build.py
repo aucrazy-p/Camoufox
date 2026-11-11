@@ -32,6 +32,12 @@ import time
 import zipfile
 from pathlib import Path
 
+# 所有临时目录清理统一走 purge（进程内永久删除），禁止在会话里
+# 用 rm -rf / Remove-Item 删本项目目录 —— 那些会被改写成「移到回收站」
+# embeddable Python 的 ._pth 不会把脚本目录加进 sys.path，必须显式注入
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import purge  # noqa: E402
+
 # Windows 控制台默认 cp1252/cp936；CI runner 是 cp1252，中文 print 会
 # UnicodeEncodeError 直接崩。强制 UTF-8 输出。
 for _s in (sys.stdout, sys.stderr):
@@ -133,8 +139,7 @@ def _copy_tree(src: Path, dst: Path, is_site: bool = False) -> int:
 
 
 def prepare_stage() -> dict:
-    if STAGE.exists():
-        shutil.rmtree(STAGE, ignore_errors=True)
+    purge.rmtree(STAGE)
     STAGE.mkdir(parents=True)
 
     runtime_dst = STAGE / "runtime"
@@ -145,7 +150,7 @@ def prepare_stage() -> dict:
     if site.exists():
         for p in list(site.iterdir()):
             if _drop(p.name):
-                shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
+                purge.rmtree(p) if p.is_dir() else purge.unlink(p)
                 removed += 1
 
     # 把浏览器运行时拆到独立目录，之后压缩成 runtime-extra-v1.zip。
@@ -179,7 +184,7 @@ def prepare_stage() -> dict:
         res_dst.mkdir(parents=True, exist_ok=True)
     # 字体裁剪已取消，两份按文件名维护的黑白名单不再进成品（仅留开发目录作历史记录）
     for legacy in ("fonts_not_win.txt", "fonts_win.txt"):
-        (res_dst / legacy).unlink(missing_ok=True)
+        purge.unlink(res_dst / legacy)
     n_res = sum(1 for _ in res_dst.rglob("*") if _.is_file())
 
     return {"runtime_files": n_runtime, "dropped": removed, "app_files": n_app,
@@ -310,6 +315,10 @@ def verify(exe: Path) -> None:
 
 def main() -> int:
     t0 = time.time()
+    # 开工先永久清掉历史临时目录（进程内删除，不进回收站）
+    cleaned = purge.clean_temp()
+    if cleaned:
+        print(f"  已清理历史临时目录 {cleaned} 项（永久删除）", flush=True)
     print("=== 1/4 准备白名单文件并拆分运行时 ===", flush=True)
     info = prepare_stage()
     print(f"  {info}", flush=True)
