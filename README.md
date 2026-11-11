@@ -10,37 +10,14 @@
 
 首次使用在「内核与运行时」页按顺序装两样（程序绝不自动下载）：
 
-1. **浏览器运行时**（约 70 MB）：来源为本仓库 Release 固定 tag `runtime-v1`，或「指定本地 zip」离线装
+1. **浏览器运行时**（约 70 MB）：从本仓库 Release 下载，或「指定本地 zip」离线装
 2. **浏览器内核**（约 1.31 GB）：界面内选版本安装，或指定本地 zip
 
 下载失败只提示，不自动尝试第三方镜像；需要代理在界面「下载代理」填一次即可。
 
 ## 构建
 
-**只走 GitHub Actions**（见下节），本地不保留构建运行时。若确需本机重建，先用
-`python _tools\prepare_runtime.py --version 3.13.14` 生成 `runtime\`，再执行：
-
-```bat
-runtime\python.exe _tools\build.py
-```
-
-一次产出 `dist\指纹环境管理器.exe` + `runtime-extra-v1.zip` + `.sha256`，脚本自带白名单与双向断言校验。
-
-**清理只走 `_tools\purge.py`**（用 CPython 内建 `nt.unlink` / `nt.rmdir` 永久删除，不进回收站）：
-
-```bat
-python _tools\purge.py --list   :: 预览
-python _tools\purge.py --temp   :: 清 stage / fresh_data / cache 等
-```
-
-构建脚本每次开工会自动清一次。**禁止对项目目录用 `rm -rf` / `Remove-Item` / `rd /s`，也不要直接用 `shutil.rmtree` / `os.unlink`**：WorkBuddy 内置 Python 会通过 `sitecustomize.py` 把这些删除函数替换成「移到回收站」版，反复构建会累积上万条、数 GB，导致回收站显示有文件却清不掉。
-
-## GitHub Actions
-
-`build.yml` **只有 `workflow_dispatch` 手动触发**，无 push / PR / 定时触发。默认不发布；勾选 `publish_release` 时额外做两件事（`--clobber` 覆盖，下载地址固定不变）：
-
-1. 运行时包 → tag `runtime-v1`（程序内置下载地址）
-2. exe → tag `app-latest`，资产名固定 **`CamoufoxManager.exe`**（必须 ASCII——中文文件名上传时会被编码损坏，且 `default.exe` 这类名字会被杀软按病毒文件名规则拦截）
+源码开放，可在仓库的 Actions 页面手动触发工作流自行构建；日常使用直接下载 Release 中的 `CamoufoxManager.exe` 即可。
 
 ## 注意
 
