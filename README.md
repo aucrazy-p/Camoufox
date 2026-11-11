@@ -17,7 +17,8 @@
 
 ## 构建
 
-本机构建（需自备 `runtime\` 内嵌 Python）：
+**只走 GitHub Actions**（见下节），本地不保留构建运行时。若确需本机重建，先用
+`python _tools\prepare_runtime.py --version 3.13.14` 生成 `runtime\`，再执行：
 
 ```bat
 runtime\python.exe _tools\build.py
@@ -25,14 +26,14 @@ runtime\python.exe _tools\build.py
 
 一次产出 `dist\指纹环境管理器.exe` + `runtime-extra-v1.zip` + `.sha256`，脚本自带白名单与双向断言校验。
 
-**清理临时目录只走 `_tools\purge.py`**（进程内永久删除，不进回收站）：
+**清理只走 `_tools\purge.py`**（用 CPython 内建 `nt.unlink` / `nt.rmdir` 永久删除，不进回收站）：
 
 ```bat
-runtime\python.exe _tools\purge.py --list   :: 预览
-runtime\python.exe _tools\purge.py --temp   :: 清 stage / fresh_data / cache 等
+python _tools\purge.py --list   :: 预览
+python _tools\purge.py --temp   :: 清 stage / fresh_data / cache 等
 ```
 
-构建脚本每次开工会自动清一次。**禁止对项目目录用 `rm -rf` / `Remove-Item` / `rd /s`**：执行环境的安全删除层会把这些批量删除改写成「移到回收站」，反复构建会累积上万条、数 GB，导致回收站显示有文件却清不掉。
+构建脚本每次开工会自动清一次。**禁止对项目目录用 `rm -rf` / `Remove-Item` / `rd /s`，也不要直接用 `shutil.rmtree` / `os.unlink`**：WorkBuddy 内置 Python 会通过 `sitecustomize.py` 把这些删除函数替换成「移到回收站」版，反复构建会累积上万条、数 GB，导致回收站显示有文件却清不掉。
 
 ## GitHub Actions
 
